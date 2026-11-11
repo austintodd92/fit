@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fit</title>
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fit">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app"></main>
+<div id="toast" role="status" aria-live="polite"></div>
+<nav id="nav" aria-label="Sections">
+  <button data-act="tab" data-v="today">Today</button>
+  <button data-act="tab" data-v="history">History</button>
+  <button data-act="tab" data-v="progress">Progress</button>
+  <button data-act="tab" data-v="settings">Settings</button>
+</nav>
+<script src="plan.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
