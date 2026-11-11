@@ -11,7 +11,9 @@
   // ---------- state ----------
   function defaults() {
     return { v: 1, cycle: 0, profile: 'home', prog: JSON.parse(JSON.stringify(P.SEED)),
-             sessions: [], weights: [], tomb: [], active: null };
+             sessions: [], weights: [], tomb: [], active: null,
+             runs: [], runProg: { level: 1, last: null, at: 0 },
+             runPrefs: { mode: 'outdoor', cue: 'beep' }, activeRun: null };
   }
   function loadState() {
     try {
@@ -86,6 +88,7 @@
     var html = '';
     if (view === 'today') html = renderToday();
     else if (view === 'history') html = renderHistory();
+    else if (view === 'run') html = window.FitRunUI ? FitRunUI.render() : '';
     else if (view === 'progress') html = renderProgress();
     else html = renderSettings();
     app.innerHTML = html;
@@ -94,6 +97,7 @@
       btns[i].className = btns[i].getAttribute('data-v') === view ? 'on' : '';
     }
     window.scrollTo(0, keepScroll ? y : 0);
+    if (view === 'run' && window.FitRunUI) FitRunUI.afterRender();
   }
 
   function profileSeg() {
@@ -412,6 +416,8 @@
           S = defaults(); save(); summary = null; sync.msg = ''; view = 'today'; render();
         }
         return;
+      default:
+        if (name.indexOf('run') === 0 && window.FitRunUI) FitRunUI.act(name, d);
     }
   }
 
@@ -438,7 +444,8 @@
   var sync = { busy: false, again: false, msg: '', timer: null, last: 0 };
 
   function payload() {
-    return { v: 1, sessions: S.sessions, weights: S.weights, tomb: S.tomb || [], prog: S.prog };
+    return { v: 1, sessions: S.sessions, weights: S.weights, tomb: S.tomb || [], prog: S.prog,
+             runs: S.runs || [], runProg: S.runProg };
   }
   function setSyncStatus(msg) {
     sync.msg = msg;
@@ -464,7 +471,7 @@
       // Fold in anything that changed on this device while the request was in flight.
       var merged = FitSync.mergeStates(payload(), res.merged);
       S.sessions = merged.sessions; S.weights = merged.weights; S.tomb = merged.tomb;
-      S.prog = merged.prog; S.cycle = merged.cycle;
+      S.prog = merged.prog; S.cycle = merged.cycle; S.runs = merged.runs; S.runProg = merged.runProg;
       save();
       sync.last = Date.now();
       setSyncStatus('Synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
@@ -517,10 +524,11 @@
   // ---------- wiring ----------
   document.addEventListener('click', function (e) {
     var el = e.target.closest ? e.target.closest('[data-act]') : null;
-    if (el) act(el.getAttribute('data-act'), {
-      v: el.getAttribute('data-v'), p: el.getAttribute('data-p'), idx: el.getAttribute('data-idx'),
-      ei: el.getAttribute('data-ei'), si: el.getAttribute('data-si'), id: el.getAttribute('data-id')
-    });
+    if (el) act(el.getAttribute('data-act'), el.dataset);
+  });
+  document.addEventListener('keydown', function (e) {
+    var id = e.target && e.target.id;
+    if (e.key === 'Enter' && (id === 'syEmail' || id === 'syPass')) { e.preventDefault(); doAuth('signin'); }
   });
   document.addEventListener('input', function (e) { onInput(e.target); });
   document.addEventListener('change', function (e) { onInput(e.target); });
@@ -533,6 +541,10 @@
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible' && Date.now() - sync.last > 60000) scheduleSync(300);
   });
+
+  window.FitApp = { state: function () { return S; }, save: save, toast: toast, esc: esc, uid: uid, shortDate: shortDate,
+                    rerender: function (keep) { render(keep); }, sync: scheduleSync };
+  if (window.FitRunUI) FitRunUI.init(window.FitApp);
 
   window.__fit = { act: act, onInput: onInput, render: render, state: function () { return S; },
                    setView: function (v) { view = v; }, syncNow: syncNow };

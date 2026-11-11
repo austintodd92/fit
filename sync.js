@@ -54,8 +54,18 @@
       else prog[id] = (r.at || 0) > (l.at || 0) ? r : l;
     });
 
+    var rm = byId(remote.runs);
+    (local.runs || []).forEach(function (r) { rm[r.id] = r; });
+    var runs = Object.keys(rm).map(function (id) { return rm[id]; }).sort(function (a, b) {
+      return ((b.finishedAt || 0) - (a.finishedAt || 0)) || (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+    });
+    var lrp = local.runProg, rrp = remote.runProg;
+    var runProg = !lrp ? rrp : !rrp ? lrp : ((rrp.at || 0) > (lrp.at || 0) ? rrp : lrp);
+    if (!runProg) runProg = { level: 1, last: null, at: 0 };
+
     var cycle = sessions.length ? (sessions[0].typeIdx + 1) % N_TYPES : (local.cycle || 0);
-    return { v: 1, sessions: sessions, weights: weights, tomb: tomb, prog: prog, cycle: cycle };
+    return { v: 1, sessions: sessions, weights: weights, tomb: tomb, prog: prog, cycle: cycle,
+             runs: runs, runProg: runProg };
   }
   function normalize(p) { return mergeStates(p, null); }
 

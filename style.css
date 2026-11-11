@@ -105,7 +105,24 @@ summary::-webkit-details-marker { display: none; }
 .wrow input { width: 96px; text-align: center; font: inherit; font-size: 16px; color: var(--text); background: var(--field);
   border: 1px solid var(--border); border-radius: 10px; min-height: 42px; }
 
-#nav { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr);
+.live { text-align: center; }
+.phase { font-size: 20px; font-weight: 800; letter-spacing: .12em; margin-top: 6px; }
+.phase.run { color: var(--accent); }
+.phase.walk { color: #38bdf8; }
+.phase.warm, .phase.cool { color: var(--muted); }
+.clock { font-size: 88px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin: 4px 0; }
+.bar { height: 8px; background: var(--field); border-radius: 999px; overflow: hidden; margin: 14px 0; border: 1px solid var(--border); }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px; }
+.stats span { display: block; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stats small { color: var(--muted); font-size: 12px; }
+.rpe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 8px 0; }
+.rpe button { appearance: none; min-height: 46px; border-radius: 10px; border: 1px solid var(--border); background: var(--field);
+  color: var(--text); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+.rpe button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.inline3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+
+#nav { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
   background: var(--nav); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
 #nav button { appearance: none; border: 0; background: transparent; color: var(--muted); font: inherit;
