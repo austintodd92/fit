@@ -11,7 +11,7 @@
   // ---------- state ----------
   function defaults() {
     return { v: 1, cycle: 0, profile: 'home', prog: JSON.parse(JSON.stringify(P.SEED)),
-             sessions: [], weights: [], active: null };
+             sessions: [], weights: [], tomb: [], active: null };
   }
   function loadState() {
     try {
@@ -293,7 +293,7 @@
       h += '<div class="wrow"><span>' + esc(ex.name) + '<br><span class="muted small">' + esc(P.UNIT[ex.kind]) + '</span></span>' +
            '<input type="number" inputmode="decimal" step="any" value="' + (p && p.load != null ? p.load : '') + '" data-f="load" data-id="' + id + '" aria-label="' + esc(ex.name) + ' working weight"></div>';
     });
-    h += '</section><section class="card"><h2>Backup</h2>' +
+    h += '</section>' + syncCard() + '<section class="card"><h2>Backup</h2>' +
          '<p class="muted small">Your data lives on this phone until cloud sync is added. Download a backup now and then, and before clearing Safari data.</p>' +
          '<div class="stack"><button class="btn block" data-act="download">Download backup</button>' +
          '<button class="btn block" data-act="copy">Copy backup text</button>' +
@@ -316,7 +316,7 @@
       if (rec.skipped) { rec.result = 'skipped'; rec.note = ''; return; }
       var ex = P.EX[rec.exId];
       var r = L.evaluate(ex, S.prog[rec.exId], rec, a.date);
-      if (r.prog) S.prog[rec.exId] = r.prog;
+      if (r.prog && r.prog !== S.prog[rec.exId]) { r.prog.at = Date.now(); S.prog[rec.exId] = r.prog; }
       rec.result = r.result; rec.note = r.note;
       if (r.result !== 'skipped') lines.push({ name: ex.name, result: r.result, note: r.note });
     });
@@ -327,6 +327,7 @@
     summary = lines;
     save();
     render();
+    scheduleSync(300);
   }
 
   function act(name, d) {
@@ -335,6 +336,9 @@
     if (d.ei != null && a) rec = a.exercises[Number(d.ei)];
     switch (name) {
       case 'tab': view = d.v; render(); return;
+      case 'signin': case 'signup': doAuth(name); return;
+      case 'syncnow': syncNow(true); return;
+      case 'signout': FitSync.signOut(); sync.msg = ''; render(true); return;
       case 'dismiss': summary = null; render(); return;
       case 'profile': S.profile = d.p; save(); render(true); return;
       case 'start': startSession(Number(d.idx)); render(); return;
@@ -370,11 +374,12 @@
         var lb = parseFloat(document.getElementById('wVal').value);
         if (!(lb > 50 && lb < 600)) { toast('Enter your weight in pounds'); return; }
         S.weights.push({ id: uid(), date: date, lb: lb });
-        save(); render(true); toast('Saved'); return;
+        save(); render(true); toast('Saved'); scheduleSync(300); return;
       }
       case 'delweight':
         S.weights = S.weights.filter(function (w) { return w.id !== d.id; });
-        save(); render(true); return;
+        S.tomb = (S.tomb || []).concat([d.id]);
+        save(); render(true); scheduleSync(300); return;
       case 'download': {
         try {
           var blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
@@ -402,8 +407,9 @@
         return;
       }
       case 'reset':
-        if (confirm('Erase all workouts, weights and settings on this device? This cannot be undone.')) {
-          S = defaults(); save(); summary = null; view = 'today'; render();
+        if (confirm('Erase everything on this device and sign out of cloud sync? Anything already synced stays in the cloud and comes back when you sign in again.')) {
+          if (window.FitSync) FitSync.signOut();
+          S = defaults(); save(); summary = null; sync.msg = ''; view = 'today'; render();
         }
         return;
     }
@@ -416,8 +422,8 @@
     if (f === 'load') {
       var id = el.getAttribute('data-id'), v = el.value === '' ? null : Number(el.value);
       if (v == null || isNaN(v) || v <= 0) delete S.prog[id];
-      else S.prog[id] = Object.assign({ extra: 0, miss: 0, last: null }, S.prog[id], { load: v });
-      save(); return;
+      else S.prog[id] = Object.assign({ extra: 0, miss: 0, last: null }, S.prog[id], { load: v, at: Date.now() });
+      save(); scheduleSync(1500); return;
     }
     if (f === 'w' || f === 'r') {
       if (!S.active) return;
@@ -426,6 +432,86 @@
       set[f] = el.value === '' ? null : Number(el.value);
       save();
     }
+  }
+
+  // ---------- cloud sync ----------
+  var sync = { busy: false, again: false, msg: '', timer: null, last: 0 };
+
+  function payload() {
+    return { v: 1, sessions: S.sessions, weights: S.weights, tomb: S.tomb || [], prog: S.prog };
+  }
+  function setSyncStatus(msg) {
+    sync.msg = msg;
+    var e = document.getElementById('syncStatus');
+    if (e) e.textContent = msg;
+  }
+  function typing() {
+    var a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA)$/.test(a.tagName));
+  }
+  function scheduleSync(delay) {
+    if (!window.FitSync || !FitSync.signedIn()) return;
+    clearTimeout(sync.timer);
+    sync.timer = setTimeout(function () { syncNow(false); }, delay || 0);
+  }
+  function syncNow(manual) {
+    if (!window.FitSync || !FitSync.configured() || !FitSync.signedIn()) return Promise.resolve();
+    if (sync.busy) { sync.again = true; return Promise.resolve(); }
+    sync.busy = true;
+    if (manual) setSyncStatus('Syncing…');
+    var before = FitSync.canon(FitSync.normalize(payload()));
+    return FitSync.run(payload()).then(function (res) {
+      // Fold in anything that changed on this device while the request was in flight.
+      var merged = FitSync.mergeStates(payload(), res.merged);
+      S.sessions = merged.sessions; S.weights = merged.weights; S.tomb = merged.tomb;
+      S.prog = merged.prog; S.cycle = merged.cycle;
+      save();
+      sync.last = Date.now();
+      setSyncStatus('Synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+      var now = FitSync.canon(FitSync.normalize(payload()));
+      if (now !== FitSync.canon(FitSync.normalize(res.merged))) sync.again = true;
+      if (now !== before && !typing()) render(true);
+    }).catch(function (e) {
+      if (e && e.offline) setSyncStatus('Offline, will sync when you are back online');
+      else if (e && e.auth) { setSyncStatus('Signed out. Sign in again to keep syncing.'); if (view === 'settings') render(true); }
+      else setSyncStatus('Sync problem: ' + ((e && e.message) || 'unknown error'));
+    }).then(function () {
+      sync.busy = false;
+      if (sync.again) { sync.again = false; scheduleSync(400); }
+    });
+  }
+  function doAuth(kind) {
+    var em = document.getElementById('syEmail'), pw = document.getElementById('syPass');
+    var email = em ? em.value.trim() : '', pass = pw ? pw.value : '';
+    if (!email || !pass) { toast('Enter your email and password'); return; }
+    setSyncStatus(kind === 'signup' ? 'Creating account…' : 'Signing in…');
+    var p = kind === 'signup' ? FitSync.signUp(email, pass) : FitSync.signIn(email, pass);
+    p.then(function (r) {
+      if (r && r.needsConfirm) { setSyncStatus('Check your email to confirm the account, then sign in here.'); return; }
+      setSyncStatus('Signed in, syncing…');
+      render(true);
+      scheduleSync(0);
+    }).catch(function (e) {
+      setSyncStatus(e && e.offline ? 'No connection right now' : ((e && e.message) || 'Could not sign in'));
+    });
+  }
+  function syncCard() {
+    var h = '<section class="card"><h2>Cloud sync</h2>';
+    if (!window.FitSync || !FitSync.configured()) {
+      return h + '<p class="muted small">Cloud sync is not set up in this copy of the app yet.</p></section>';
+    }
+    if (FitSync.signedIn()) {
+      return h + '<p>Signed in as <b>' + esc(FitSync.email()) + '</b></p>' +
+        '<p class="muted small" id="syncStatus">' + esc(sync.msg || 'Ready') + '</p>' +
+        '<div class="grid2"><button class="btn" data-act="syncnow">Sync now</button>' +
+        '<button class="btn ghost" data-act="signout">Sign out</button></div></section>';
+    }
+    return h + '<p class="muted small">Sign in to keep your phone and computer in step. Your data is private to your login.</p>' +
+      '<div class="stack"><input class="field" type="email" id="syEmail" autocomplete="email" autocapitalize="none" placeholder="Email" aria-label="Email">' +
+      '<input class="field" type="password" id="syPass" autocomplete="current-password" placeholder="Password (6+ characters)" aria-label="Password">' +
+      '<div class="grid2"><button class="btn primary" data-act="signin">Sign in</button>' +
+      '<button class="btn" data-act="signup">Create account</button></div>' +
+      '<p class="muted small" id="syncStatus">' + esc(sync.msg) + '</p></div></section>';
   }
 
   // ---------- wiring ----------
@@ -443,6 +529,13 @@
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
 
-  window.__fit = { act: act, onInput: onInput, render: render, state: function () { return S; }, setView: function (v) { view = v; } };
+  window.addEventListener('online', function () { scheduleSync(500); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && Date.now() - sync.last > 60000) scheduleSync(300);
+  });
+
+  window.__fit = { act: act, onInput: onInput, render: render, state: function () { return S; },
+                   setView: function (v) { view = v; }, syncNow: syncNow };
   render();
+  scheduleSync(800);
 })();

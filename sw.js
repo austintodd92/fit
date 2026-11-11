@@ -1,6 +1,6 @@
 /* Offline shell. Bump CACHE when you ship a new version of the app files. */
-var CACHE = 'fit-v1';
-var FILES = ['./', 'index.html', 'style.css', 'plan.js', 'logic.js', 'app.js',
+var CACHE = 'fit-v2';
+var FILES = ['./', 'index.html', 'style.css', 'plan.js', 'logic.js', 'config.js', 'sync.js', 'app.js',
              'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
