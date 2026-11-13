@@ -122,7 +122,27 @@ summary::-webkit-details-marker { display: none; }
 .rpe button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .inline3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
 
-#nav { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
+.datenav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.datenav .btn { min-width: 44px; }
+.datenav .btn[disabled] { opacity: .35; }
+.big { font-size: 46px; font-weight: 800; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.big small { font-size: 16px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.mrow { display: flex; justify-content: space-between; font-size: 14px; margin-top: 8px; }
+.bar.thin { height: 6px; margin: 4px 0 6px; }
+.seg5 { grid-template-columns: repeat(5, 1fr); }
+.seg5 button { font-size: 12.5px; padding: 9px 2px; }
+.btnrow { appearance: none; display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; font: inherit;
+  color: var(--text); background: transparent; border: 0; border-top: 1px solid var(--border); padding: 11px 2px; cursor: pointer; }
+.btnrow .meta { color: var(--muted); font-size: 14px; white-space: nowrap; }
+.addpanel { margin-top: 10px; }
+.pick { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-top: 10px; background: var(--field); }
+.card.inner { background: var(--field); margin: 10px 0 0; padding: 12px; }
+.inline4 { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 8px; }
+.irow { display: grid; grid-template-columns: 1fr 64px 40px; gap: 6px; align-items: center; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.grid4 .btn { padding: 6px 2px; font-size: 13px; }
+
+#nav { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr);
   background: var(--nav); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
 #nav button { appearance: none; border: 0; background: transparent; color: var(--muted); font: inherit;

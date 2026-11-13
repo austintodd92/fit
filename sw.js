@@ -1,7 +1,7 @@
 /* Offline shell. Online: always fetch the newest files (falling back to the saved copy if the
    network is slow or down). Bump CACHE when you ship a new version so old copies are dropped. */
-var CACHE = 'fit-v4';
-var FILES = ['./', 'index.html', 'style.css', 'plan.js', 'logic.js', 'run-logic.js', 'config.js', 'sync.js', 'run.js', 'app.js',
+var CACHE = 'fit-v5';
+var FILES = ['./', 'index.html', 'style.css', 'plan.js', 'logic.js', 'run-logic.js', 'meals-logic.js', 'config.js', 'sync.js', 'run.js', 'meals.js', 'app.js',
              'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 var SLOW_MS = 3000;
 

@@ -25,6 +25,22 @@
     return JSON.stringify(x === undefined ? null : x);
   }
 
+  // Union by id; when both sides have an item, the one changed most recently (higher `at`) wins.
+  function mergeAt(l, r, dead, cmp) {
+    var m = {};
+    (r || []).forEach(function (x) { m[x.id] = x; });
+    (l || []).forEach(function (x) {
+      var o = m[x.id];
+      if (!o || (x.at || 0) >= (o.at || 0)) m[x.id] = x;
+    });
+    return Object.keys(m).filter(function (id) { return !dead[id]; }).map(function (id) { return m[id]; }).sort(cmp);
+  }
+  function newer(l, r) {
+    if (!l) return r;
+    if (!r) return l;
+    return (r.at || 0) > (l.at || 0) ? r : l;
+  }
+
   // Union of two states. Sessions and weigh-ins merge by id, deleted weigh-ins stay deleted,
   // and each exercise keeps whichever side changed it most recently.
   function mergeStates(local, remote) {
@@ -63,9 +79,23 @@
     var runProg = !lrp ? rrp : !rrp ? lrp : ((rrp.at || 0) > (lrp.at || 0) ? rrp : lrp);
     if (!runProg) runProg = { level: 1, last: null, at: 0 };
 
+    var idCmp = function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; };
+    var foods = mergeAt(local.foods, remote.foods, dead, idCmp);
+    var recipes = mergeAt(local.recipes, remote.recipes, dead, idCmp);
+    var meals = mergeAt(local.meals, remote.meals, dead, function (a, b) {
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : ((b.at || 0) - (a.at || 0)) || idCmp(a, b);
+    });
+    var waists = mergeAt(local.waists, remote.waists, dead, function (a, b) {
+      return a.date < b.date ? -1 : a.date > b.date ? 1 : idCmp(a, b);
+    });
+    var target = newer(local.target, remote.target) || { kcal: 2450, p: 150, c: 295, f: 75, at: 0 };
+    var body = newer(local.body, remote.body) || { rmr: '', bf: '', ffm: '', date: '', at: 0 };
+    var prefs = newer(local.prefs, remote.prefs) || { avoid: '', at: 0 };
+
     var cycle = sessions.length ? (sessions[0].typeIdx + 1) % N_TYPES : (local.cycle || 0);
     return { v: 1, sessions: sessions, weights: weights, tomb: tomb, prog: prog, cycle: cycle,
-             runs: runs, runProg: runProg };
+             runs: runs, runProg: runProg, foods: foods, recipes: recipes, meals: meals, waists: waists,
+             target: target, body: body, prefs: prefs };
   }
   function normalize(p) { return mergeStates(p, null); }
 

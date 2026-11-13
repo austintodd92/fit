@@ -1,7 +1,7 @@
 /* Fit: phase 1 (workout plan + log + weight). Local-first, no dependencies. */
 (function () {
   'use strict';
-  var L = window.FitLogic, P = window.FitPlan;
+  var L = window.FitLogic, P = window.FitPlan, ML = window.FitMealsLogic;
   var KEY = 'fit.v1';
   var app = document.getElementById('app');
   var view = 'today';
@@ -13,7 +13,13 @@
     return { v: 1, cycle: 0, profile: 'home', prog: JSON.parse(JSON.stringify(P.SEED)),
              sessions: [], weights: [], tomb: [], active: null,
              runs: [], runProg: { level: 1, last: null, at: 0 },
-             runPrefs: { mode: 'outdoor', cue: 'beep' }, activeRun: null };
+             runPrefs: { mode: 'outdoor', cue: 'beep' }, activeRun: null,
+             foods: ML ? JSON.parse(JSON.stringify(ML.SEED_FOODS)) : [],
+             recipes: ML ? JSON.parse(JSON.stringify(ML.SEED_RECIPES)) : [],
+             meals: [], waists: [],
+             target: { kcal: 2450, p: 150, c: 295, f: 75, at: 0 },
+             body: { rmr: '', bf: '', ffm: '', date: '', at: 0 },
+             prefs: { avoid: '', at: 0 } };
   }
   function loadState() {
     try {
@@ -89,6 +95,7 @@
     if (view === 'today') html = renderToday();
     else if (view === 'history') html = renderHistory();
     else if (view === 'run') html = window.FitRunUI ? FitRunUI.render() : '';
+    else if (view === 'meals') html = window.FitMealsUI ? FitMealsUI.render() : '';
     else if (view === 'progress') html = renderProgress();
     else html = renderSettings();
     app.innerHTML = html;
@@ -284,8 +291,65 @@
         return '<div class="wrow"><span>' + shortDate(e.date) + ' · ' + num(e.lb) + ' lb</span><button class="btn sm ghost danger" data-act="delweight" data-id="' + esc(e.id) + '">Remove</button></div>';
       }).join('');
     }
-    h += '</section><section class="card"><h2>Lifts</h2>' + strengthTrends() + '</section>';
+    h += '</section>' + summaryCard(weeks) + waistCard() + '<section class="card"><h2>Lifts</h2>' + strengthTrends() + '</section>';
     return h;
+  }
+
+  function summaryCard(weeks) {
+    if (!ML) return '';
+    var map = {};
+    weeks.forEach(function (w) { map[w.week] = { week: w.week, w: w.avg }; });
+    ML.weeklyIntake(S.meals).forEach(function (i) {
+      var r = map[i.week] = map[i.week] || { week: i.week };
+      r.kcal = i.avg; r.days = i.days;
+    });
+    var keys = Object.keys(map).sort().reverse().slice(0, 8);
+    var h = '<section class="card"><h2>Weekly summary</h2>';
+    if (!keys.length) return h + '<p class="muted">Weigh-ins and logged meals show up here side by side.</p></section>';
+    h += '<table><tr><th>Week of</th><th class="r">Avg weight</th><th class="r">Avg kcal</th></tr>' + keys.map(function (k) {
+      var r = map[k];
+      return '<tr><td>' + shortDate(r.week) + '</td><td class="r">' + (r.w != null ? r.w.toFixed(1) : '–') + '</td><td class="r">' +
+             (r.kcal != null ? r.kcal + ' <span class="muted small">(' + r.days + 'd)</span>' : '–') + '</td></tr>';
+    }).join('') + '</table><p class="muted small">Average calories count only days you logged, with the number of days in brackets.</p>';
+    var ffm = parseFloat((S.body || {}).ffm);
+    if (ffm > 0 && weeks.length) {
+      var est = ML.estBodyFat(ffm, weeks[weeks.length - 1].avg);
+      if (est != null) {
+        h += '<p><b>Estimated body fat: about ' + est.toFixed(1) + '%</b> <span class="muted small">if you have kept all your muscle. The real figure is usually a little higher. ' +
+             'Abs tend to show somewhere in the low-to-mid teens or below, and it varies a lot from person to person.</span></p>';
+      }
+    }
+    return h + '</section>';
+  }
+
+  function waistCard() {
+    var list = S.waists.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    var h = '<section class="card"><h2>Waist</h2>' +
+            '<div class="inline"><input class="field" type="date" id="waDate" value="' + L.today() + '" aria-label="Date">' +
+            '<input class="field" type="number" inputmode="decimal" step="0.1" id="waVal" placeholder="inches" aria-label="Waist in inches">' +
+            '<button class="btn primary" data-act="addwaist">Add</button></div>' +
+            '<p class="muted small">Measure at the navel, relaxed, the same time of day each week. Along with your weight and photos it shows fat loss the scale can hide.</p>';
+    if (list.length) {
+      var last = list[list.length - 1], first = list[0], d0 = last.inch - first.inch;
+      h += '<p><b>Latest: ' + num(last.inch) + ' in</b>' + (list.length > 1 ? ' <span class="muted">(' + (d0 > 0 ? '+' : '') + d0.toFixed(1) + ' in since ' + shortDate(first.date) + ')</span>' : '') + '</p>';
+      h += list.slice().reverse().slice(0, 5).map(function (w) {
+        return '<div class="wrow"><span>' + shortDate(w.date) + ' · ' + num(w.inch) + ' in</span><button class="btn sm ghost danger" data-act="delwaist" data-id="' + esc(w.id) + '">Remove</button></div>';
+      }).join('');
+    }
+    return h + '</section>';
+  }
+
+  function bodyCard() {
+    var b = S.body || {};
+    function fld(label, k, type, val, extra) {
+      return '<div class="wrow"><span>' + label + '</span><input type="' + type + '" ' + (extra || '') + ' inputmode="decimal" value="' + esc(val == null ? '' : val) +
+             '" data-f="body" data-k="' + k + '" aria-label="' + esc(label) + '"></div>';
+    }
+    return '<section class="card"><h2>Starting point</h2><p class="muted small">From a body scan and metabolism test, if you have them. Used for the body-fat estimate and a warning if your calorie target drops below your measured resting burn. Saved to your account only.</p>' +
+      fld('Resting burn (kcal/day)', 'rmr', 'number', b.rmr, 'step="1"') +
+      fld('Body fat at scan (%)', 'bf', 'number', b.bf, 'step="0.1"') +
+      fld('Fat-free mass (lb)', 'ffm', 'number', b.ffm, 'step="0.1"') +
+      fld('Scan date', 'date', 'date', b.date) + '</section>';
   }
 
   function renderSettings() {
@@ -297,7 +361,7 @@
       h += '<div class="wrow"><span>' + esc(ex.name) + '<br><span class="muted small">' + esc(P.UNIT[ex.kind]) + '</span></span>' +
            '<input type="number" inputmode="decimal" step="any" value="' + (p && p.load != null ? p.load : '') + '" data-f="load" data-id="' + id + '" aria-label="' + esc(ex.name) + ' working weight"></div>';
     });
-    h += '</section>' + syncCard() + '<section class="card"><h2>Backup</h2>' +
+    h += '</section>' + bodyCard() + syncCard() + '<section class="card"><h2>Backup</h2>' +
          '<p class="muted small">Your data lives on this phone until cloud sync is added. Download a backup now and then, and before clearing Safari data.</p>' +
          '<div class="stack"><button class="btn block" data-act="download">Download backup</button>' +
          '<button class="btn block" data-act="copy">Copy backup text</button>' +
@@ -416,8 +480,20 @@
           S = defaults(); save(); summary = null; sync.msg = ''; view = 'today'; render();
         }
         return;
+      case 'addwaist': {
+        var wd = document.getElementById('waDate').value || L.today();
+        var inch = parseFloat(document.getElementById('waVal').value);
+        if (!(inch > 20 && inch < 70)) { toast('Enter your waist in inches'); return; }
+        S.waists.push({ id: uid(), date: wd, inch: inch });
+        save(); render(true); toast('Saved'); scheduleSync(300); return;
+      }
+      case 'delwaist':
+        S.waists = S.waists.filter(function (w) { return w.id !== d.id; });
+        S.tomb = (S.tomb || []).concat([d.id]);
+        save(); render(true); scheduleSync(300); return;
       default:
         if (name.indexOf('run') === 0 && window.FitRunUI) FitRunUI.act(name, d);
+        else if (/^(meal|food|rec|tg)/.test(name) && window.FitMealsUI) FitMealsUI.act(name, d);
     }
   }
 
@@ -425,6 +501,12 @@
     var f = el.getAttribute('data-f');
     if (!f) return;
     if (f === 'warm') { if (S.active) { S.active.warm = el.checked; save(); } return; }
+    if (f === 'body') {
+      S.body = S.body || {};
+      S.body[el.getAttribute('data-k')] = el.value;
+      S.body.at = Date.now();
+      save(); scheduleSync(1500); return;
+    }
     if (f === 'load') {
       var id = el.getAttribute('data-id'), v = el.value === '' ? null : Number(el.value);
       if (v == null || isNaN(v) || v <= 0) delete S.prog[id];
@@ -445,7 +527,9 @@
 
   function payload() {
     return { v: 1, sessions: S.sessions, weights: S.weights, tomb: S.tomb || [], prog: S.prog,
-             runs: S.runs || [], runProg: S.runProg };
+             runs: S.runs || [], runProg: S.runProg,
+             foods: S.foods || [], recipes: S.recipes || [], meals: S.meals || [], waists: S.waists || [],
+             target: S.target, body: S.body, prefs: S.prefs };
   }
   function setSyncStatus(msg) {
     sync.msg = msg;
@@ -472,6 +556,8 @@
       var merged = FitSync.mergeStates(payload(), res.merged);
       S.sessions = merged.sessions; S.weights = merged.weights; S.tomb = merged.tomb;
       S.prog = merged.prog; S.cycle = merged.cycle; S.runs = merged.runs; S.runProg = merged.runProg;
+      S.foods = merged.foods; S.recipes = merged.recipes; S.meals = merged.meals; S.waists = merged.waists;
+      S.target = merged.target; S.body = merged.body; S.prefs = merged.prefs;
       save();
       sync.last = Date.now();
       setSyncStatus('Synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
@@ -545,6 +631,7 @@
   window.FitApp = { state: function () { return S; }, save: save, toast: toast, esc: esc, uid: uid, shortDate: shortDate,
                     rerender: function (keep) { render(keep); }, sync: scheduleSync };
   if (window.FitRunUI) FitRunUI.init(window.FitApp);
+  if (window.FitMealsUI) FitMealsUI.init(window.FitApp);
 
   window.__fit = { act: act, onInput: onInput, render: render, state: function () { return S; },
                    setView: function (v) { view = v; }, syncNow: syncNow };
